@@ -10,6 +10,10 @@
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\NSP3\NSP3.csproj" />
+    <None Remove="Resources\mipmap-anydpi-v26\appicon.xml" />
+    <None Remove="Resources\mipmap-anydpi-v26\appicon_round.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\NSP3\SwiftUtils.csproj" />
   </ItemGroup>
 </Project>

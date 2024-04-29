@@ -3,11 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34723.18
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClientApp", "ClientApp\ClientApp.csproj", "{44165245-808F-4B2D-958E-1B7A7E1F74D5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ClientApp", "ClientApp\ClientApp.csproj", "{44165245-808F-4B2D-958E-1B7A7E1F74D5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NSP3", "NSP3\NSP3.csproj", "{796FA319-BF15-4BE5-9CC7-BA6DC0FFD3AC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SwiftUtils", "NSP3\SwiftUtils.csproj", "{796FA319-BF15-4BE5-9CC7-BA6DC0FFD3AC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileServer", "FileServer\FileServer.csproj", "{A6DE23DE-A03B-4A37-AF48-D64A72A79287}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FileServer", "FileServer\FileServer.csproj", "{A6DE23DE-A03B-4A37-AF48-D64A72A79287}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GlobalTests", "GlobalTests\GlobalTests.csproj", "{76F62E41-BE57-45CF-8342-FAE394E689BF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,6 +31,10 @@ Global
 		{A6DE23DE-A03B-4A37-AF48-D64A72A79287}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A6DE23DE-A03B-4A37-AF48-D64A72A79287}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6DE23DE-A03B-4A37-AF48-D64A72A79287}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76F62E41-BE57-45CF-8342-FAE394E689BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76F62E41-BE57-45CF-8342-FAE394E689BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76F62E41-BE57-45CF-8342-FAE394E689BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76F62E41-BE57-45CF-8342-FAE394E689BF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
