@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AwesomeSockets" Version="2.1.18" />
+    <PackageReference Include="NetCoreServer" Version="8.0.7" />
   </ItemGroup>
 
 </Project>

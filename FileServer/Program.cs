@@ -1,14 +1,14 @@
-﻿using AwesomeSockets.Domain.Sockets;
-using AwesomeSockets.Sockets;
-using AwesomeSockets.Buffers;
+﻿using NetCoreServer;
 using SwiftUtils;
+using System.Net;
 using System.Net.Sockets;
-using Buffer = AwesomeSockets.Buffers.Buffer;
+using System.Text.Json.Serialization;
 
 namespace FileServer
 {
     internal class Program
     {
+        /*
         public static void TestSocket()
         {
             SwiftServer server = new SwiftServer();
@@ -54,6 +54,30 @@ namespace FileServer
         static void Main(string[] args)
         {
             TestSocket();
+        }
+        */
+
+        public static void Main(string[] args)
+        {
+
+            string password = "Testing123";
+            SwiftServer server = new SwiftServer(8080);
+            SwiftClient client = new SwiftClient("127.0.0.1", 8080);
+
+            server.Start();
+            client.Start();
+
+            ReceiveJob job = client.AddReceiveJob("RESULT.avi");
+            job.OnJobCompleted += (sender, e) => { Console.WriteLine("Receive Completed!"); };
+            job.OnJobUpdate += (sender, e) => { Console.WriteLine("Job is " + ((ReceiveJob)sender!).Percentage + " percent complete"); };
+
+            server.ClientConnected += (sender, e) =>
+            {
+                // Send a file to the client.
+                Thread.Sleep(2000);
+                e.Client.SendFile("TEST.avi");
+            };
+            
         }
     }
 }

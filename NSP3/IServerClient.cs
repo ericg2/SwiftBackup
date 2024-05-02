@@ -1,24 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
+
+#nullable enable
 
 namespace SwiftUtils
 {
-    public interface IServerClient
+    public interface IServerClient : IClient
     {
-        public string ID { get; }
-        public IPAddress? Address { get; }
-        public DateTime ConnectTime { get; }
-
         public SwiftServer AssociatedServer { get; }
 
-        public bool IsConnected { get; }
+        public bool Kick(string reason="");
+        public bool SendMessage(byte[] message);
+        public bool SendMessage(string message);
+        public int SendFile(string filePath, bool recursive=false);
 
-        bool Kick();
-        bool SendMessage(byte[] message);
-        bool SendMessage(string message);
+        public string GetString();
     }
 }

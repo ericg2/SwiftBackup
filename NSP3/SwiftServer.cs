@@ -1,10 +1,16 @@
-﻿using AwesomeSockets.Domain.Sockets;
-using AwesomeSockets.Sockets;
-using System.Net;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 using System.Net.Sockets;
-using AwesomeSockets.Buffers;
-using Buffer = AwesomeSockets.Buffers.Buffer;
-using System.Reflection.Metadata.Ecma335;
+using System.Threading;
+using System.Net;
+using System.IO;
+using System;
+
+using static SwiftUtils.SwiftCommand;
+
+#nullable enable
 
 namespace SwiftUtils
 {
@@ -32,23 +38,16 @@ namespace SwiftUtils
 
             public DateTime KeepAlive { set; get; }
 
-            public ISocket Socket { get; }
+            public Socket Socket { get; }
 
             public SwiftServer AssociatedServer { get; }
 
-            public bool IsHandshake { set; get; }
-
-            public IPAddress? Address
+            public IPAddress Address
             {
                 get
                 {
-                    if (!IsConnected)
-                        return null;
-
-                    EndPoint? ep = Socket.GetRemoteEndPoint();
-                    if (ep == null)
-                        return null;
-
+                    // FIXME: may cause problems!
+                    EndPoint? ep = Socket.RemoteEndPoint;
                     return (ep as IPEndPoint)!.Address;
                 }
             }
@@ -57,19 +56,19 @@ namespace SwiftUtils
             {
                 get
                 {
-                    return Socket.GetSocket().Connected;
+                    return Socket.Connected;
                 }
             }
 
             public bool SendMessage(byte[] message)
             {
                 // Attempt to generate a packet message.
-                Buffer? buf = SocketUtil.GeneratePacket(message, AssociatedServer._PasswordHash);
+                byte[]? buf = SocketUtil.GeneratePacket(message, AssociatedServer._PasswordHash);
                 if (buf == null)
                     return false;
                 try
                 {
-                    if (Socket.SendMessage(buf) <= 0)
+                    if (Socket.Send(buf) <= 0)
                         throw new Exception();
                     return true;
                 }
@@ -85,19 +84,42 @@ namespace SwiftUtils
                 return SendMessage(SocketUtil.ENCODING.GetBytes(message));
             }
 
-            public bool Kick()
+            public bool Kick(string reason = "")
             {
                 // Attempt to kick the client off the server.
-                return AssociatedServer.Kick(ID);
+                return AssociatedServer.Kick(ID, reason);
             }
 
-            public ServerClient(SwiftServer server, ISocket socket)
+            public int SendFile(string filePath, bool recursive=false)
+            {
+                return SocketUtil.TrySendFile(filePath, Socket, AssociatedServer._PasswordHash, recursive);
+            }
+
+            /*
+            public string ReceiveFile(string overridePath="")
+            {
+                return SocketUtil.TryReceiveFile(Socket, AssociatedServer._PasswordHash, overridePath);
+            }
+            */
+
+            public string GetString()
+            {
+                if (!IsConnected || Address == null)
+                    return string.Empty;
+                return $"{ID}§{Address.ToString()}§{ConnectTime.ToString()}";
+            }
+
+            public bool SendCommand(SwiftCommand.CommandType type, string message = "")
+            {
+                return SendMessage(GenerateComamnd(type, message));
+            }
+
+            public ServerClient(SwiftServer server, Socket socket)
             {
                 AssociatedServer = server;
                 ConnectTime = DateTime.Now;
                 Socket = socket;
                 KeepAlive = DateTime.Now.AddMinutes(1);
-                IsHandshake = false;
 
                 // Attempt to generate an ID whcich is UNIQUE.
                 for (int i = 0; i < 100; i++)
@@ -128,7 +150,7 @@ namespace SwiftUtils
 
         private Queue<string> _RemoveQueue;
         private byte[]? _PasswordHash;
-        private ISocket? _Listener;
+        private Socket? _Listener;
         private Thread? _ListenThread;
         private TimeSpan? _KeepAlive;
 
@@ -137,29 +159,26 @@ namespace SwiftUtils
         public event EventHandler<ServerClientEventArgs>? ClientConnected;
         public event EventHandler<ServerClientEventArgs>? ClientDisconnected;
         public event EventHandler<ServerClientEventArgs>? MessageReceived;
-   
-        public uint MaxClients { set; get; }
-        public ushort Port { set; get; }
-        public bool IsRunning { private set; get; }
+
+        public uint      MaxClients { set; get; }
+        public ushort    Port       { set; get; }
+        
+        public bool      IsRunning { private set; get; }
         public DateTime? StartTime { private set; get; }
 
-        public TimeSpan? KeepAlive { set; get; }
-
-        public int Clients
+        public IServerClient[] Clients
         {
             get
             {
-                return _Clients.Count;
+                return _Clients.ToArray();
             }
         }
 
-        public string Password
+        public uint TotalConnected
         {
-            set
+            get
             {
-                _PasswordHash = string.IsNullOrEmpty(value) 
-                    ? null 
-                    : SocketUtil.ComputeSHA256(SocketUtil.ENCODING.GetBytes(value));
+                return (uint)_Clients.Count;
             }
         }
 
@@ -173,7 +192,18 @@ namespace SwiftUtils
             }
         }
 
-        public SwiftServer(ushort port=8080, bool logEnabled=false)
+        public SwiftServer SetPassword(string password)
+        {
+            if (string.IsNullOrEmpty(password))
+            {
+                _PasswordHash = null;
+                return this;
+            }
+            _PasswordHash = SocketUtil.ComputeSHA256(password);
+            return this;
+        }
+
+        public SwiftServer(ushort port=8080, string password="", bool logEnabled=false)
         {
             _Logger = new SimpleLogger();
             _Clients = new List<ServerClient>();
@@ -182,16 +212,20 @@ namespace SwiftUtils
             Port = port;
             if (logEnabled)
                 _Logger.Start();
+            SetPassword(password);
         }    
 
-        public bool Kick(string id)
+        public bool Kick(string id, string reason = "")
         {
             ServerClient? client = FindClientByIDInternal(id);
             if (client == null)
                 return false;
-            client.SendMessage("SERVKICK");
+
+            client.SendCommand(CommandType.KICK, reason);
             client.Socket.Close();
+            
             ClientDisconnected?.Invoke(this, new ServerClientEventArgs(this, client));
+            _Logger.Info("Disconnected client " + id + " due to " + (string.IsNullOrEmpty(reason) ? "N/A" : reason));
             lock (_ClientLock)
             {
                 _RemoveQueue.Enqueue(id);
@@ -238,7 +272,7 @@ namespace SwiftUtils
                 return;
 
             ids[0] = "Listener";
-            tasks[0] = Task.Run(() => AweSock.TcpAccept(_Listener));
+            tasks[0] = Task.Run(_Listener.Accept);
             Queue<string> addQueue = new Queue<string>();
 
             while (IsRunning)
@@ -286,20 +320,36 @@ namespace SwiftUtils
                     {
                         // Check if the keep-alive is violated.
                         if (DateTime.Now >= FindClientByIDInternal(id)?.KeepAlive)
-                            Kick(id);
+                        {
+                            Kick(id, "Keep-alive");
+                            continue;
+                        }
                     }
                     if (!tasks[i].IsCompleted)
                         continue;
-                    if (id == "Listener" && tasks[i] is Task<ISocket>)
+                    if (id == "Listener" && tasks[i] is Task<Socket>)
                     {
-                        ISocket socket = ((Task<ISocket>)tasks[i]).Result;
-                        ServerClient client = new ServerClient(this, socket);
-                        _Clients.Add(client);
-                        addQueue.Enqueue(client.ID);
-                        ClientConnected?.Invoke(this, new ServerClientEventArgs(this, client));
-
+                        Socket socket = ((Task<Socket>)tasks[i]).Result;
+                        
                         // Restart the task to begin running.
-                        tasks[i] = Task.Run(() => AweSock.TcpAccept(_Listener));
+                        tasks[i] = Task.Run(_Listener.Accept);
+                        socket.NoDelay = true;
+                        socket.ReceiveBufferSize = 16384;
+                        socket.SendBufferSize = 16384;
+                        ServerClient client = new ServerClient(this, socket);
+                        
+                        if (_Clients.Count > MaxClients)
+                        {
+                            client.Kick("Too many clients!");
+                            continue;
+                        }
+
+                        lock (_ClientLock)
+                        {
+                            _Clients.Add(client);
+                            addQueue.Enqueue(client.ID);
+                        }
+                        ClientConnected?.Invoke(this, new ServerClientEventArgs(this, client));
                         continue;
                     }
 
@@ -312,20 +362,59 @@ namespace SwiftUtils
 
                         tasks[i] = Task.Run(() => SocketUtil.ReceivePacketBytes(client.Socket));
                         if (res == null)
-                        {
                             break;
-                        }
 
-                        if (SocketUtil.ENCODING.GetString(res) == "SERVKEEPALIVE")
+                        client.KeepAlive = DateTime.Now.AddSeconds(60);
+
+                        // Check if a command has been sent.
+                        SwiftCommand? command = SwiftCommand.FromString(SocketUtil.ENCODING.GetString(res));
+                        if (command == null)
                         {
-                            client.KeepAlive = DateTime.Now.AddSeconds(10);
+                            MessageReceived?.Invoke(this, new ServerClientEventArgs(this, client, res));
                             continue;
                         }
-                        client.KeepAlive = DateTime.Now.AddSeconds(10);
-                        MessageReceived?.Invoke(this, new ServerClientEventArgs(this, client, res));
+
+                        switch (command.Type)
+                        {
+                            case CommandType.KEEP_ALIVE:
+                            {
+                                // Tell the client their request has been processed.
+                                client.SendCommand(CommandType.SUCCESS);
+                                break;
+                            }
+                            case CommandType.DISCONNECT: 
+                            {
+                                client.Kick("Requested");
+                                break;
+                            }
+                            default:
+                            {
+                                client.SendCommand(CommandType.FAILURE, "Invalid command.");
+                                break;
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        public bool Stop()
+        {
+            if (!IsRunning)
+            {
+                _Logger.Error("The 'stop' method has been called while not running!");
+                return false;
+            }
+            IsRunning = false;
+            StartTime = new DateTime();
+            foreach (IServerClient cli in new List<IServerClient>(_Clients))
+            {
+                Kick(cli.ID);
+            }
+            Thread.Sleep(2000);
+            _Listener?.Close();
+            _Logger.Info("Shut down server. All clients disconnected.");
+            return true;
         }
 
         public bool Start()
@@ -337,10 +426,16 @@ namespace SwiftUtils
             }
 
             IsRunning = true;
-            _Listener = AweSock.TcpListen(Port);
+
+            _Listener = new Socket(SocketType.Stream, ProtocolType.IP);
+            _Listener.Bind(new IPEndPoint(IPAddress.Any, Port));
+            _Listener.Listen(100);
+
             _ListenThread = new Thread(new ThreadStart(HandleClients));
             _ListenThread.Start();
             StartTime = DateTime.Now;
+
+            _Logger.Info("Started server at port " + Port);
 
             return true;
         }
