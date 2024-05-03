@@ -60,16 +60,23 @@ namespace FileServer
         public static void Main(string[] args)
         {
 
+            /*
             string password = "Testing123";
             SwiftServer server = new SwiftServer(8080);
             SwiftClient client = new SwiftClient("127.0.0.1", 8080);
+            SwiftClient client2 = new SwiftClient("127.0.0.1", 8080);
 
             server.Start();
             client.Start();
+            client2.Start();
 
             ReceiveJob job = client.AddReceiveJob("RESULT.avi");
-            job.OnJobCompleted += (sender, e) => { Console.WriteLine("Receive Completed!"); };
-            job.OnJobUpdate += (sender, e) => { Console.WriteLine("Job is " + ((ReceiveJob)sender!).Percentage + " percent complete"); };
+            job.OnJobCompleted += (sender, e) => { Console.WriteLine("Receive 1 Completed!"); };
+            job.OnJobUpdate += (sender, e) => { Console.WriteLine("Job 1 is " + ((ReceiveJob)sender!).Percentage + " percent complete"); };
+
+            ReceiveJob job2 = client2.AddReceiveJob("RESULT2.avi");
+            job.OnJobCompleted += (sender, e) => { Console.WriteLine("Receive 2 Completed!"); };
+            job.OnJobUpdate += (sender, e) => { Console.WriteLine("Job 2 is " + ((ReceiveJob)sender!).Percentage + " percent complete"); };
 
             server.ClientConnected += (sender, e) =>
             {
@@ -77,7 +84,22 @@ namespace FileServer
                 Thread.Sleep(2000);
                 e.Client.SendFile("TEST.avi");
             };
-            
+            */
+
+            string password = "Testing123";
+            FileJob job = FileJob.CreateTransmitJob("TEST.AVI");
+            job.OnJobCompleted += (sender, e) => { Console.WriteLine("Job 1 Completed!"); };
+            job.OnJobUpdate += (sender, e) => { Console.WriteLine("Job 1 is " + ((FileJob)sender!).Percentage + " percent complete"); };
+
+            SwiftServer server = new SwiftServer(8080);
+            SwiftClient client = new SwiftClient("127.0.0.1", 8080);
+
+            server.Start();
+            client.Start();
+
+            Thread.Sleep(2000);
+
+            server.Clients[0].AddJob(job);
         }
     }
 }

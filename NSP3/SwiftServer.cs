@@ -60,6 +60,8 @@ namespace SwiftUtils
                 }
             }
 
+            public FileJobPool _Jobs = new FileJobPool();
+
             public bool SendMessage(byte[] message)
             {
                 // Attempt to generate a packet message.
@@ -90,17 +92,16 @@ namespace SwiftUtils
                 return AssociatedServer.Kick(ID, reason);
             }
 
-            public int SendFile(string filePath, bool recursive=false)
+            public bool AddJob(FileJob job)
             {
-                return SocketUtil.TrySendFile(filePath, Socket, AssociatedServer._PasswordHash, recursive);
+                if (_Jobs.AddJob(job, out byte[]? tP, AssociatedServer._PasswordHash))
+                {
+                    if (tP != null)
+                        Socket.Send(tP);
+                    return true;
+                }
+                return false;
             }
-
-            /*
-            public string ReceiveFile(string overridePath="")
-            {
-                return SocketUtil.TryReceiveFile(Socket, AssociatedServer._PasswordHash, overridePath);
-            }
-            */
 
             public string GetString()
             {
@@ -153,6 +154,7 @@ namespace SwiftUtils
         private Socket? _Listener;
         private Thread? _ListenThread;
         private TimeSpan? _KeepAlive;
+        private FileJobPool _FileJobs = new FileJobPool();
 
         private object _ClientLock = new object();
 
@@ -367,9 +369,20 @@ namespace SwiftUtils
                         client.KeepAlive = DateTime.Now.AddSeconds(60);
 
                         // Check if a command has been sent.
-                        SwiftCommand? command = SwiftCommand.FromString(SocketUtil.ENCODING.GetString(res));
+                        string packetStr = SocketUtil.ENCODING.GetString(res);
+                        SwiftCommand? command = SwiftCommand.FromString(packetStr);
                         if (command == null)
                         {
+
+                            // Process any receive jobs.
+                            if (client._Jobs.Process(new List<string>() { packetStr}, out List<byte[]> tPs, _PasswordHash) > 0)
+                            {
+                                foreach (byte[] tP in tPs)
+                                {
+                                    client.Socket.Send(tP);
+                                }
+                            }
+
                             MessageReceived?.Invoke(this, new ServerClientEventArgs(this, client, res));
                             continue;
                         }

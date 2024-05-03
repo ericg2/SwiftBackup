@@ -11,6 +11,8 @@ using System;
 
 using static SwiftUtils.SwiftCommand;
 using System.Text;
+using NetCoreServer;
+using static System.Reflection.Metadata.BlobBuilder;
 
 #nullable enable
 
@@ -30,9 +32,23 @@ namespace SwiftUtils
             }
         }
 
+        public class ClientJobEventArgs : EventArgs
+        {
+            public SwiftClient Client { private set; get; }
+            public FileJob Job { private set; get; }
+
+            public ClientJobEventArgs(SwiftClient client, FileJob job)
+            {
+                Client = client;
+                Job = job;
+            }
+        }
+
         public IPAddress Address { private set; get; }
         public bool IsRunning { private set; get; }
         public ushort Port { private set; get; }
+
+        public FileJobPool Jobs { private set; get; } = new FileJobPool();
 
         public event EventHandler<ClientEventArgs>? OnMessageReceived;
         public event EventHandler<ClientEventArgs>? OnConnected;
@@ -42,7 +58,6 @@ namespace SwiftUtils
         private Socket? _Socket;
         private byte[]? _PasswordHash;
         private DateTime _NextKeepAlive;
-        private List<ReceiveJob> _ReceiveJobs;
 
         private void HandleServer()
         {
@@ -63,11 +78,12 @@ namespace SwiftUtils
                         if (command == null)
                         {
                             OnMessageReceived?.Invoke(this, new ClientEventArgs(this, packet));
-                            _ReceiveJobs.RemoveAll(o => o.IsCompleted);
-
-                            foreach (ReceiveJob job in _ReceiveJobs)
+                            if (Jobs.Process(new List<string>() { packetStr }, out List<byte[]> tPs, _PasswordHash) > 0)
                             {
-                                job.Process(packetStr, _Socket, _PasswordHash);
+                                foreach (byte[] tP in tPs)
+                                {
+                                    _Socket.Send(tP);
+                                }
                             }
                         }
                         else
@@ -82,11 +98,17 @@ namespace SwiftUtils
             }
         }
 
-        public ReceiveJob AddReceiveJob(string filePath="")
+        public bool AddJob(FileJob job)
         {
-            ReceiveJob job = new ReceiveJob(filePath);
-            _ReceiveJobs.Add(job);
-            return job;
+            if (_Socket == null)
+                return false;
+            if (Jobs.AddJob(job, out byte[]? tP, _PasswordHash))
+            {
+                if (tP != null)
+                    _Socket.Send(tP);
+                return true;
+            }
+            return false;
         }
 
         private bool SendCommand(CommandType type, string message = "")
@@ -136,7 +158,7 @@ namespace SwiftUtils
         {
             // Make sure the IP address can be parsed correctly.
             Address = IPAddress.Parse(ipAddress);
-            _ReceiveJobs = new List<ReceiveJob>();
+ 
             Port = port;
             SetPassword(password);
         }

@@ -82,8 +82,8 @@ namespace SwiftUtils
         public bool IsCompleted { private set; get; } = false;
         public bool IsSuccess { private set; get; } = false;
         public double BytesPerSecond { private set; get; } = 0;
-        public DateTime? StartTime { private set; get; } = null;
-        public DateTime? EndTime { private set; get; } = null;
+        public DateTime? StartTime   { private set; get; } = null;
+        public DateTime? EndTime     { private set; get; } = null;
 
         public TimeSpan ElapsedTime
         {
@@ -523,7 +523,6 @@ namespace SwiftUtils
             return 1;
         }
 
-
         public static List<string> ReceivePacketString(Socket socket, byte[]? passHash = null)
         {
             List<string> output = new List<string>();
@@ -538,20 +537,18 @@ namespace SwiftUtils
         {
             try
             {
-                byte[]? res = null;
                 // Attempt to read the bytes of the socket.
                 var buffer = new List<byte>();
                 bool wasReading = false;
 
+                Span<byte> currByte = stackalloc byte[1];
+                int recv = 0;
                 while (true)
                 {
                     if (socket.Available > 0)
                     {
                         wasReading = true;
-                        var currByte = new byte[1];
-                        var byteCounter = socket.Receive(currByte, 0, currByte.Length, SocketFlags.None);
-
-                        if (byteCounter == 1)
+                        if ((recv = socket.Receive(currByte, SocketFlags.None)) == 1)
                         {
                             buffer.Add(currByte[0]);
                         }

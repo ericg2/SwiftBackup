@@ -12,7 +12,7 @@ namespace SwiftUtils
         public bool Kick(string reason="");
         public bool SendMessage(byte[] message);
         public bool SendMessage(string message);
-        public int SendFile(string filePath, bool recursive=false);
+        public bool AddJob(FileJob job);
 
         public string GetString();
     }
